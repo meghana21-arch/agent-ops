@@ -1,10 +1,8 @@
 <p align="center">
-  <img src="agentops_logo.png" alt="AgentOps Logo" width="120" />
+  <img src="agentops_logo.png" alt="AgentOps Logo" width="180" />
 </p>
 
-<h1 align="center">AgentOps Runtime</h1>
-
-<p align="center">A durable execution layer for AI agent workflows.</p>
+<h2 align="center">A durable execution layer for AI agent workflows.</h2>
 
 ---
 
