@@ -1,0 +1,23 @@
+# Go
+*.exe
+*.test
+*.out
+/bin/
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+*.swp
+
+# Docker
+docker-compose.override.yml
+
+# Node
+node_modules/
+.next/
+frontend/.next/
+frontend/node_modules/
