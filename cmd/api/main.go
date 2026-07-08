@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/agentops/runtime/internal/agents"
 	"github.com/agentops/runtime/internal/db"
 	"github.com/agentops/runtime/internal/middleware"
 	"github.com/agentops/runtime/internal/projects"
@@ -60,6 +61,10 @@ func main() {
 	runRepo := runs.NewRepository(pool)
 	runSvc := runs.NewService(runRepo)
 	runs.NewHandler(runSvc).Register(v1)
+
+	agentRepo := agents.NewRepository(pool)
+	agentSvc := agents.NewService(agentRepo)
+	agents.NewHandler(agentSvc).Register(v1)
 
 	port := os.Getenv("PORT")
 	if port == "" {
