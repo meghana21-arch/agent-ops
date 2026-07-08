@@ -176,3 +176,43 @@ func (r *Repository) UpdateStepStatus(ctx context.Context, stepID uuid.UUID, sta
 	)
 	return err
 }
+
+// StartStep marks a step as running and stores the model's action decision.
+func (r *Repository) StartStep(ctx context.Context, stepID uuid.UUID, actionJSON []byte, toolName *string, toolInputJSON []byte) error {
+	_, err := r.db.Exec(ctx,
+		`UPDATE workflow_steps
+		 SET status = 'RUNNING', started_at = NOW(),
+		     action_json = $1, tool_name = $2, tool_input_json = $3
+		 WHERE id = $4`,
+		actionJSON, toolName, toolInputJSON, stepID,
+	)
+	return err
+}
+
+// CompleteStep marks a step terminal and stores the tool output.
+func (r *Repository) CompleteStep(ctx context.Context, stepID uuid.UUID, status StepStatus, toolOutputJSON []byte, errMsg *string) error {
+	_, err := r.db.Exec(ctx,
+		`UPDATE workflow_steps
+		 SET status = $1, completed_at = NOW(), tool_output_json = $2, error_message = $3
+		 WHERE id = $4`,
+		status, toolOutputJSON, errMsg, stepID,
+	)
+	return err
+}
+
+// UpdateRunProgress updates the run's status, current step index, and running token/cost totals atomically.
+func (r *Repository) UpdateRunProgress(ctx context.Context, runID uuid.UUID, status RunStatus, stepIdx int, tokensToAdd int, costToAdd float64) error {
+	_, err := r.db.Exec(ctx,
+		`UPDATE workflow_runs
+		 SET status = $1,
+		     current_step_index = $2,
+		     total_tokens = total_tokens + $3,
+		     total_cost_usd = total_cost_usd + $4,
+		     updated_at = NOW(),
+		     started_at   = CASE WHEN started_at IS NULL AND $1 != 'CREATED' THEN NOW() ELSE started_at END,
+		     completed_at = CASE WHEN $1 IN ('COMPLETED','FAILED','CANCELLED') THEN NOW() ELSE completed_at END
+		 WHERE id = $5`,
+		status, stepIdx, tokensToAdd, costToAdd, runID,
+	)
+	return err
+}
