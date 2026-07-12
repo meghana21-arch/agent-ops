@@ -14,6 +14,7 @@ import (
 	"github.com/agentops/runtime/internal/db"
 	"github.com/agentops/runtime/internal/llm"
 	"github.com/agentops/runtime/internal/runs"
+	"github.com/agentops/runtime/internal/tools"
 )
 
 func main() {
@@ -46,9 +47,15 @@ func main() {
 		log.Fatal("ANTHROPIC_API_KEY is required")
 	}
 
+	workspaceDir := os.Getenv("WORKSPACE_DIR")
+	if workspaceDir == "" {
+		workspaceDir = "/tmp/agentops-workspace"
+	}
+
 	loop := &agentLoop{
 		runRepo:   runs.NewRepository(pool),
 		agentRepo: agents.NewRepository(pool),
+		toolSvc:   tools.NewService(workspaceDir, tools.NewRepository(pool)),
 		llm:       llm.NewClient(apiKey),
 	}
 

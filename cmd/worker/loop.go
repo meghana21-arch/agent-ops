@@ -9,12 +9,14 @@ import (
 	"github.com/agentops/runtime/internal/agents"
 	"github.com/agentops/runtime/internal/llm"
 	"github.com/agentops/runtime/internal/runs"
+	"github.com/agentops/runtime/internal/tools"
 	"github.com/google/uuid"
 )
 
 type agentLoop struct {
 	runRepo   *runs.Repository
 	agentRepo *agents.Repository
+	toolSvc   *tools.Service
 	llm       *llm.Client
 }
 
@@ -87,22 +89,37 @@ func (l *agentLoop) processRun(ctx context.Context, run *runs.Run) {
 				return
 			}
 
-			// Phase 4 will replace this stub with real tool execution.
-			stubOutput := map[string]string{"result": "tool execution not yet implemented (Phase 4)"}
-			stubJSON, _ := json.Marshal(stubOutput)
-			if err := l.runRepo.CompleteStep(ctx, step.ID, runs.StepSucceeded, stubJSON, nil); err != nil {
-				log.Printf("[run %s] complete step: %v", run.ID, err)
-			}
-			if err := l.runRepo.UpdateRunProgress(ctx, run.ID, runs.StatusRunning, nextIdx, usage.TotalTokens, usage.CostUSD); err != nil {
-				log.Printf("[run %s] update run progress: %v", run.ID, err)
+			policy := tools.ApprovalPolicy{RequireApprovalFor: cfg.ApprovalPolicy.RequireApprovalFor}
+			result, err := l.toolSvc.Execute(ctx, run.ProjectID, action.ToolName, action.Input, policy)
+			if err != nil {
+				errMsg := err.Error()
+				_ = l.runRepo.CompleteStep(ctx, step.ID, runs.StepFailed, nil, &errMsg)
+				l.failRun(ctx, run.ID, fmt.Sprintf("tool execute: %v", err))
+				return
 			}
 
-			// Append to conversation history so Claude has full context next iteration
+			if result.NeedsApproval {
+				reason := fmt.Sprintf("tool %s requires approval", action.ToolName)
+				_ = l.runRepo.CompleteStep(ctx, step.ID, runs.StepRequiresApproval, nil, &reason)
+				_ = l.runRepo.UpdateRunProgress(ctx, run.ID, runs.StatusWaitingForApproval, nextIdx, usage.TotalTokens, usage.CostUSD)
+				log.Printf("[run %s] paused at step %d — %s", run.ID, nextIdx, reason)
+				return
+			}
+
+			if result.Error != nil {
+				_ = l.runRepo.CompleteStep(ctx, step.ID, runs.StepFailed, nil, result.Error)
+				l.failRun(ctx, run.ID, fmt.Sprintf("tool %s failed: %s", action.ToolName, *result.Error))
+				return
+			}
+
+			_ = l.runRepo.CompleteStep(ctx, step.ID, runs.StepSucceeded, result.Output, nil)
+			_ = l.runRepo.UpdateRunProgress(ctx, run.ID, runs.StatusRunning, nextIdx, usage.TotalTokens, usage.CostUSD)
+
 			history = append(history,
 				llm.Message{Role: "assistant", Content: string(assistantJSON)},
-				llm.Message{Role: "user", Content: fmt.Sprintf("Tool result for %s: %s\n\nContinue. What is your next action?", action.ToolName, string(stubJSON))},
+				llm.Message{Role: "user", Content: fmt.Sprintf("Tool result for %s: %s\n\nContinue. What is your next action?", action.ToolName, string(result.Output))},
 			)
-			log.Printf("[run %s] step %d: TOOL_CALL %s", run.ID, nextIdx, action.ToolName)
+			log.Printf("[run %s] step %d: TOOL_CALL %s → succeeded", run.ID, nextIdx, action.ToolName)
 
 		default:
 			l.failRun(ctx, run.ID, fmt.Sprintf("unexpected actionType: %s", action.ActionType))
