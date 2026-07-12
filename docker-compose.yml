@@ -52,6 +52,7 @@ services:
       DATABASE_URL: postgres://agentops:agentops@postgres:5432/agentops?sslmode=disable
       REDIS_URL: redis://redis:6379
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      WORKSPACE_DIR: /workspace
     depends_on:
       postgres:
         condition: service_healthy

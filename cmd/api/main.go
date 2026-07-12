@@ -14,6 +14,7 @@ import (
 	"github.com/agentops/runtime/internal/middleware"
 	"github.com/agentops/runtime/internal/projects"
 	"github.com/agentops/runtime/internal/runs"
+	"github.com/agentops/runtime/internal/tools"
 )
 
 func main() {
@@ -65,6 +66,14 @@ func main() {
 	agentRepo := agents.NewRepository(pool)
 	agentSvc := agents.NewService(agentRepo)
 	agents.NewHandler(agentSvc).Register(v1)
+
+	workspaceDir := os.Getenv("WORKSPACE_DIR")
+	if workspaceDir == "" {
+		workspaceDir = "/tmp/agentops-workspace"
+	}
+	toolRepo := tools.NewRepository(pool)
+	toolSvc := tools.NewService(workspaceDir, toolRepo)
+	tools.NewHandler(toolSvc).Register(v1)
 
 	port := os.Getenv("PORT")
 	if port == "" {
